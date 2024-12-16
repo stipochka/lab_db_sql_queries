@@ -1,5 +1,5 @@
 База данных, 4 Вариант:
-Запросы на создание таблиц находятся в папке: internal/sql/schema, 
+Запросы на создание таблиц находятся в папке: internal/sql/schema/, 
 
 Таблица Medpersonal: 
 id - SERIAL INT PRIMARY KEY, сделан уникальным и автоматически увеличавающимся
@@ -29,5 +29,6 @@ operationid INTEGER REFERENCES OperationTypes(id) - cсылка на тип оп
 quantity INTEGER CHECK (quantity > 0) - количество выполненных операций, проверка исключает неверные значения
 payment NUMERIC(10, 2) - оплата за операцию
 
+Запросы на вставку находятся в папке internal/sql/schema/queries/
 Запросы находятся в папке sql_queries
 
