@@ -1,0 +1,243 @@
+SELECT DISTINCT address
+FROM medpersonal; -- различные адреса всех медработников
+
+SELECT DISTINCT Institution
+FROM Workplace; -- список всех различных медучреждений
+
+SELECT DISTINCT Date
+FROM WorkActivity; -- различные дни, для которых хранится информация о трудовой деятельности.
+
+SELECT id, date FROM operationtypes
+WHERE cost >= 14000; --даты и номера договоров, когда производились операции на сумму не менее 14000руб.
+
+SELECT taxpercentage FROM 
+medpersonal 
+WHERE address='Навашино' or address='Выкса'; размер налога для медперсонала из Выксы или Навашино;
+
+SELECT name, cost, basepoint 
+FROM operationtypes  
+WHERE name LIKE '%Инъекция%' and cost > 10000 
+ORDER BY basepoint,cost;  -- название, стоимость и адрес опорного пункта для операций, в названии которых есть слово “Инъекция”, и стоящих более 10000руб.
+ Результат отсортировать по адресу и стоимости.
+
+SELECT wa.date as date,
+mp.lastname as lastname, 
+wp.institution as institution, 
+op.name as opername 
+FROM workactivity wa JOIN medpersonal mp ON wa.medpersonalid = mp.id 
+JOIN workplace wp ON wa.workplaceid = wp.id 
+JOIN operationtypes op ON wa.operationid = op.id; -- На основании данных о проведенных операциях вывести в следующем формате все записи:
+дата, фамилия медперсонала, название места работы, название операции;
+
+SELECT wa.contract as contract,
+wp.institution as name,
+wa.quantity as quantity, 
+wa.payment as payment
+FROM workactivity wa
+JOIN workplace wp ON wa.workplaceid = wp.id; -- номер договора, название места работы, количество операций, оплата. Отсортировать по возрастанию оплаты.
+
+SELECT mp.lastname as lastname,
+mp.address as address 
+FROM workactivity as wa
+JOIN medpersonal as mp ON wa.medpersonalid = mp.id 
+WHERE wa.operationid = 1 and wa.quantity > 1; -- фамилии и места проживания медперсонала, проведших более одного наложения гипса в день;
+
+SELECT DISTINCT
+op.name as name
+FROM workactivity as wa
+JOIN workplace as wp ON wa.workplaceid = wp.id
+JOIN medpersonal as mp ON wa.medpersonalid = mp.id 
+JOIN operationtypes as op ON wa.operationid = op.id                                                 
+WHERE mp.address IN ('Выкса', 'Вознесенское') and wp.id=3; -- название операций, которые проводили врачи из Вознесенского или Выксы в больницах;
+
+SELECT wp.institution as institution, 
+wp.localbudgetpercentage,
+mp.lastname as lastname
+FROM workactivity as wa 
+JOIN medpersonal as mp ON wa.medpersonalid = mp.id
+JOIN workplace as wp on wa.workplaceid = wp.id
+WHERE mp.taxpercentage BETWEEN 7 AND 16 
+ORDER BY wp.LocalBudgetPercentage, mp.taxpercentage; -- названия и размер отчислений в местный бюджет для тех учреждений, где проводили операции те, у кого налог не менее 7%, но не более 16%. Включить в вывод фамилии таких людей и отсортировать по размеру отчислений и налогу;
+
+SELECT wa.date as date, 
+wa.operationid, mp.lastname as lastname FROM 
+workactivity as wa 
+JOIN medpersonal as mp ON wa.medpersonalid = mp.id
+JOIN operationtypes as op ON wa.operationid = op.id
+WHERE op.cost >= 7000
+AND wa.operationid IN
+( SELECT operationid
+FROM workactivity
+WHERE operationid IN (
+SELECT operationid 
+FROM workactivity GROUP BY operationid, medpersonalid
+HAVING COUNT(*) > 1)); -- даты, идентификаторы операций и фамилии тех, кто проводил операции стоимостью не менее 7000руб больше одного раза.
+
+UPDATE workactivity wa 
+SET payment = (payment * (1-mp.taxpercentage*0.01)) 
+FROM medpersonal mp   
+WHERE wa.medpersonalid = mp.id
+RETURNING wa.contract as contract, wa.payment as payment; -- Создать запрос для модификации всех значений столбца с суммарной величиной оплаты, чтобы он содержал истинную сумму, получаемую медперсоналом ( за вычетом налога). Вывести новые значения.
+
+Расширить таблицу с данными об операциях столбцом, содержащим величину отчислений в местный бюджет для мед.учреждения, где проводилась операция. 
+Создать запрос для ввода конкретных значений во все строки таблицы операций.
+ALTER TABLE workactivity ADD COLUMN localbudgetdeduction NUMERIC(10, 2);
+UPDATE WorkActivity wa
+SET LocalBudgetDeduction = Payment * (wp.LocalBudgetPercentage / 100)
+FROM Workplace wp
+WHERE wa.WorkplaceID = wp.ID;
+
+SELECT DISTINCT m.lastname
+FROM medpersonal m
+JOIN workactivity w ON m.id = w.medpersonalid
+JOIN operationtypes o ON w.operationid = o.id
+JOIN Workplace wp ON w.Workplaceid = wp.id
+WHERE m.address IN ('Навашино', 'Выкса')
+AND o.name LIKE '%Инъекция%'; -- найти фамилии медперсонала из Навашино, проводивших инъекции в Выксе;
+
+
+SELECT DISTINCT o.name
+FROM operationtypes o
+WHERE o.id NOT IN (
+    SELECT w.operationid
+    FROM workactivity w
+    WHERE w.date < '2024-05-15'
+); -- найти те операции, которые не проводились до среды;
+
+SELECT institution, localbudgetpercentage
+FROM workplace
+WHERE localbudgetpercentage <= ALL (
+    SELECT localbudgetpercentage
+    FROM workplace
+); -- найти среди больниц ту, которая имеет наименьший процент отчислений
+
+SELECT DISTINCT m.lastname
+FROM medpersonal m
+JOIN workactivity w ON m.id = w.medpersonalid
+WHERE w.payment <= ALL (
+    SELECT payment
+    FROM workactivity
+); -- найти педперсонал, проводивший операции с самой малой суммой оплаты;
+
+SELECT DISTINCT m.lastname, m.address
+FROM medpersonal m
+JOIN workactivity w ON m.id = w.medpersonalid
+JOIN operationtypes o ON w.operationid = o.id
+WHERE o.name = 'Наложение гипса'
+  AND w.quantity >= ANY (
+        SELECT w2.quantity
+        FROM workactivity w2
+        JOIN operationtypes o2 ON w2.operationid = o2.id
+        WHERE o2.name = 'Наложение гипса'
+          AND w.date = w2.date
+          AND w.medpersonalid = w2.medpersonalid
+); -- фамилии и места проживания медперсонала, проведших более одного наложения гипса в день;
+
+
+
+SELECT address AS location
+FROM medpersonal
+
+UNION
+
+SELECT basepoint AS location
+FROM operationtypes; -- Используя операцию UNION получить места проживания медпероснала и опероные пункты для операций.
+
+SELECT m.lastname
+FROM medpersonal m
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM WorkActivity w
+    WHERE w.medpersonalid = m.id
+      AND w.date='Суббота'
+); -- определить тот медперсонал, который не работал в субботу;
+
+SELECT wp.institution
+FROM workplace wp
+WHERE EXISTS (
+    SELECT 1
+    FROM workactivity w
+    JOIN operationtypes o ON w.operationid = o.id
+    WHERE w.workplaceid = wp.id
+      AND o.name = 'УЗИ'
+    GROUP BY w.workplaceid
+    HAVING COUNT(*) <= 1
+); -- определить те места работы, где не делали УЗИ более раза;
+
+SELECT wp.institution
+FROM workplace wp
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM medpersonal m
+    WHERE m.address <> wp.address
+      AND NOT EXISTS (
+          SELECT 1
+          FROM workactivity w
+          WHERE w.medpersonalid = m.id
+            AND w.workplaceid = wp.id
+      )
+);
+INSERT INTO WorkActivity (Contract, Date, MedpersonalID, WorkplaceID, OperationID, Quantity, Payment)
+VALUES (51048, 'Среда', 3, 2, 3, 1, 15000); -- определить места работы, где работали все врачи из чужих населенных пунктов
+
+SELECT COUNT(DISTINCT w.workplaceid) AS workplaces
+FROM workactivity w
+JOIN workplace wp ON w.workplaceid = wp.id
+JOIN medpersonal m ON w.medpersonalid = m.id
+WHERE wp.address = 'Выкса'; -- найти число различных мест работы для медперсонала, работавшего в мед.учреждениях Выксы;
+
+SELECT AVG(m.taxpercentage) AS average_tax
+FROM medpersonal m
+JOIN workactivity w ON m.id = w.medpersonalid
+JOIN operationtypes o ON w.operationid = o.id
+WHERE o.name LIKE '%Инъекция%'; -- определить средний размер налога для медперсонала, производившего иньекции;
+
+SELECT m.lastname
+FROM medpersonal m
+JOIN workactivity w ON m.id = w.medpersonalid
+JOIN operationtypes o ON w.operationid = o.id
+WHERE o.cost = (
+    SELECT MIN(cost)
+    FROM operationtypes
+); -- кто из медперсонала делал операцию с минимальной стоимостью;
+
+SELECT COUNT(*) AS operation_count
+FROM workactivity w
+JOIN medpersonal m ON w.medpersonalid = m.id
+JOIN operationtypes o ON w.operationid = o.id
+WHERE m.lastname = 'Губанов'
+  AND o.cost <= 15000
+  AND w.date = 'Понедельник'; -- определить количество операций стоимостью не более 15000, проведенных в понедельник Губановым
+
+
+SELECT 
+w.date AS day_of_week,
+o.name AS operation_name,
+COUNT(*) AS operation_count
+FROM workactivity w
+JOIN operationtypes o ON w.operationid = o.id
+GROUP BY day_of_week, operation_name; -- определить для каждого дня недели и каждой операции сколько раз ее проводили;
+
+SELECT 
+m.lastname,
+AVG(o.Cost) AS average_operation_cost
+FROM medpersonal m
+JOIN workactivity w ON m.id = w.medpersonalid
+JOIN operationtypes o ON w.operationid = o.id
+GROUP BY m.LastName; -- найти для каждого медработника среднюю стоимость всех проведенных им операций;
+
+SELECT 
+wp.institution,
+SUM(o.cost) AS total_cost
+FROM workplace wp
+JOIN workactivity wa ON wp.id = wa.workplaceid
+JOIN operationtypes o ON wa.operationid = o.id
+GROUP BY wp.institution
+HAVING SUM(o.cost) > 30000;
+
+
+
+
+
+
+
