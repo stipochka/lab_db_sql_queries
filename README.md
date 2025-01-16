@@ -1,4 +1,4 @@
-База данных, 4 Вариант:
+![procedure1](https://github.com/user-attachments/assets/eb3a404c-0d99-4754-a747-90ac562dee9b)База данных, 4 Вариант:
 Запросы на создание таблиц находятся в папке: internal/sql/schema/, 
 
 Таблица Medpersonal: 
@@ -31,4 +31,12 @@ payment NUMERIC(10, 2) - оплата за операцию
 
 Запросы на вставку находятся в папке internal/sql/schema/queries/
 Запросы находятся в папке sql_queries
+
+Лабораторная №4:
+Запросы для создания процедур/view/trigger находятся в файле: procedures_queries.txt
+Задание №1: ![procedure1](https://github.com/user-attachments/assets/8c83c7da-aa96-4e48-822d-a3c69ba500b8)
+Задание №2: ![procedure2](https://github.com/user-attachments/assets/1e1e2dfb-67ab-4576-ac82-e363a4e32166)
+Задание №3: ![procedure3](https://github.com/user-attachments/assets/159f064d-3c7f-4fca-bfda-99cd0c15a467)
+Задание №4: ![procedure4](https://github.com/user-attachments/assets/907be783-2cc4-42b1-898b-59a6dea047b0)
+
 
