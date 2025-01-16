@@ -233,7 +233,15 @@ FROM workplace wp
 JOIN workactivity wa ON wp.id = wa.workplaceid
 JOIN operationtypes o ON wa.operationid = o.id
 GROUP BY wp.institution
-HAVING SUM(o.cost) > 30000;
+HAVING SUM(o.cost) > 30000; -- определить те мед.учреждения, где суммарная величина стоимости всех проведенных в них операций была более 30000;
+
+SELECT 
+w.date AS day_of_week,
+COUNT(*) AS operation_count
+FROM workactivity w
+GROUP BY day_of_week
+ORDER BY day_of_week; -- для каждого дня недели найти число проведенных в этот день операций
+
 
 
 
