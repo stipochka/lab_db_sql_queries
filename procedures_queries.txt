@@ -1,0 +1,146 @@
+-- Task 1
+
+CREATE OR REPLACE FUNCTION GetMedworkerInfo(medpersonal_id INT)
+RETURNS TEXT LANGUAGE plpgsql AS $$
+DECLARE
+    last_date VARCHAR(30);
+    last_workplace VARCHAR(100);
+    last_payment NUMERIC(10, 2);
+    worker_last_name VARCHAR(50);
+    worker_address VARCHAR(100);
+    result TEXT;
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM Medpersonal WHERE ID = medpersonal_id) THEN
+        RETURN 'Медработник с таким идентификатором отсутствует в базе данных.';
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM WorkActivity WHERE MedpersonalID = medpersonal_id) THEN
+        SELECT LastName, Address 
+        INTO worker_last_name, worker_address
+        FROM Medpersonal 
+        WHERE ID = medpersonal_id;
+
+        RETURN CONCAT('Медработник ', worker_last_name, ' (', worker_address, ') еще не работал.');
+    END IF;
+
+    SELECT w.Date, wp.Institution, w.Payment, m.LastName, m.Address
+    INTO last_date, last_workplace, last_payment, worker_last_name, worker_address
+    FROM WorkActivity w
+    JOIN Workplace wp ON w.WorkplaceID = wp.ID
+    JOIN Medpersonal m ON w.MedpersonalID = m.ID
+    WHERE w.MedpersonalID = medpersonal_id
+    ORDER BY w.Date DESC
+    LIMIT 1;
+
+    result := CONCAT(
+        'Медработник ', worker_last_name, ' (', worker_address, ') ',
+        'последний раз работал ', last_date, ' в ', last_workplace, 
+        '. Сумма оплаты: ', TO_CHAR(last_payment, 'FM999,999.00'), ' руб.'
+    );
+
+    RETURN result;
+END;
+$$;
+
+
+-- Task 2 
+
+CREATE TABLE WorkplaceOperations (
+    WorkplaceID INTEGER NOT NULL REFERENCES Workplace(ID) ON DELETE CASCADE,
+    OperationID INTEGER NOT NULL REFERENCES OperationTypes(ID) ON DELETE CASCADE,
+    PRIMARY KEY (WorkplaceID, OperationID)
+);
+
+INSERT INTO WorkplaceOperations (WorkplaceID, OperationID)
+VALUES (1, 1), (1, 2), (3, 2), (3, 5);
+
+CREATE OR REPLACE FUNCTION CheckOperationInWorkplace()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM WorkplaceOperations 
+        WHERE WorkplaceID = NEW.WorkplaceID AND OperationID = NEW.OperationID
+    ) THEN
+        RAISE EXCEPTION 'Операция % не может быть выполнена в месте работы %', NEW.OperationID, NEW.WorkplaceID;
+    END IF;
+    RETURN NEW; 
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER BeforeInsertWorkActivity
+BEFORE INSERT ON WorkActivity
+FOR EACH ROW
+EXECUTE FUNCTION CheckOperationInWorkplace();
+
+INSERT INTO WorkActivity (Date, MedpersonalID, WorkplaceID, OperationID, Quantity, Payment)
+VALUES ('понедельник', 1, 1, 1, 2, 5000.00); 
+
+-- Task3
+
+CREATE OR REPLACE FUNCTION calculate_payment()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.Payment IS NULL THEN
+        SELECT o.Cost * NEW.Quantity
+        INTO NEW.Payment
+        FROM OperationTypes o
+        WHERE o.ID = NEW.OperationID;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_calculate_payment
+BEFORE INSERT ON WorkActivity
+FOR EACH ROW
+EXECUTE FUNCTION calculate_payment();
+
+INSERT INTO WorkActivity (Date, MedpersonalID, WorkplaceID, OperationID, Quantity)
+VALUES ('понедельник', 1, 1, 1, 10);
+
+
+-- Task4 
+CREATE OR REPLACE VIEW WorkSummary AS
+SELECT 
+    w.Contract,
+    m.LastName,
+    m.TaxPercentage,
+    o.Name AS OperationName,
+    w.Quantity,
+    w.Payment
+FROM 
+    WorkActivity w
+JOIN 
+    Medpersonal m ON w.MedpersonalID = m.ID
+JOIN 
+    OperationTypes o ON w.OperationID = o.ID;
+
+CREATE OR REPLACE FUNCTION update_worksummary()
+RETURNS TRIGGER AS $$
+BEGIN
+    UPDATE Medpersonal
+    SET TaxPercentage = NEW.TaxPercentage
+    WHERE ID = (
+        SELECT MedpersonalID FROM WorkActivity WHERE Contract = OLD.Contract
+    );
+
+    UPDATE WorkActivity
+    SET Payment = (
+        Quantity * o.Cost * (1 - NEW.TaxPercentage / 100.0)
+    )
+    FROM OperationTypes o
+    WHERE WorkActivity.Contract = OLD.Contract
+      AND WorkActivity.OperationID = o.ID;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER instead_of_update_worksummary
+INSTEAD OF UPDATE ON WorkSummary
+FOR EACH ROW
+EXECUTE FUNCTION update_worksummary();
+
+
+
